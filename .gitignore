@@ -1,0 +1,17 @@
+# Ignorar el archivo RIS grande
+*.ris
+*.RIS
+F_biblio_zotero_29131_afterclean.ris
+
+# Ignorar carpeta de outputs (CSVs con datos)
+output/
+
+# Ignorar entorno virtual de Python
+entorno/
+venv/
+__pycache__/
+*.pyc
+
+# Ignorar archivos temporales de Windows
+Thumbs.db
+desktop.ini
