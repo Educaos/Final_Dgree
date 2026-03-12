@@ -8,6 +8,8 @@ siguiendo criterios PRISMA. Procesa archivos RIS exportados desde Zotero.
 ## Requisitos
 ```bash
 pip install -r requirements.txt
+#INSTALAR (una sola vez en la terminal):
+   # pip install rispy pandas numpy scikit-learn unidecode tqdm pycountry
 ```
 
 ## Uso
