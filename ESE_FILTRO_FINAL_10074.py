@@ -128,7 +128,7 @@ print(f"      Titulo ejemplo : {str(df['title_raw'].iloc[0])[:70]}...")
 print(f"      Anios con dato : {df['year'].notna().sum():,}")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PASO 3 — DEDUPLICACIÓN RÁPIDA (TF-IDF)
+# PASO 3 — DEDUPLICACIÓN RÁPIDA (Frecuecnia de termino-IDF)
 # ─────────────────────────────────────────────────────────────────────────────
 print(f"\n{seg()} PASO 3/9 — Detectando duplicados (puede tardar 1-3 min)...")
 
@@ -139,7 +139,7 @@ df.loc[tiene_doi, "dup_doi"] = df.loc[tiene_doi].duplicated(subset=["doi_norm"],
 n_dup_doi = int(df["dup_doi"].sum())
 print(f"  OK  Duplicados por DOI exacto    : {n_dup_doi:,}")
 
-# 3B — Título similar (TF-IDF coseno — 100x más rápido que loop fuzzy)
+# 3B — Titulo similar (TF-IDF coseno — 100x más rápido que loop fuzzy)
 df["dup_fuzzy"] = False
 n_dup_fuzzy   = 0
 try:
@@ -591,6 +591,16 @@ def extraer_qmax(t):
     m = re.search(r"qmax[^0-9]{0,10}([\d]+\.?[\d]*)", t)
     return float(m.group(1)) if m else None
 
+def validar_numero(valor):
+    try:
+        return float(valor)
+    except ValueError:
+        return None  # Si el valor no es un número, lo descartamos.
+
+def extraer_qmax(t):
+    m = re.search(r"qmax[^0-9]{0,10}([\d]+\.?[\d]*)", t)
+    return validar_numero(m.group(1)) if m else None 
+    
 def extraer_remocion(t):
     m = re.search(r"([\d]{1,3}\.?[\d]*)\s*%\s*(removal|remocion|remocao|eliminacion)", t)
     return float(m.group(1)) if m else None
