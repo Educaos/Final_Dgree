@@ -248,23 +248,32 @@ KW_ADSORCION = [
 ]
 KW_EXCL_CONTAM = [
     "pfas","perfluoro","perfluorinated",
-    "pesticide","pesticides","pesticida","pesticidas",
-    "herbicide","herbicides","herbicida",
-    "heavy metal","metales pesados","cadmium","lead",
-    "mercury","arsenic","chromium","nickel",
-    "microplastic","microplastics","microplastico",
-    "oil spill","petroleum","crude oil",
-    "dye","dyes","tinte","tintes","methylene blue","rhodamine",
+    # pesticidas — solo si son el foco PRINCIPAL
+    "pesticide removal","pesticides adsorption","herbicide removal",
+    # metales pesados — solo si son el foco, no si son dopantes
+    "heavy metal removal","lead removal","cadmium removal",
+    "mercury removal","arsenic removal","chromium removal",
+    # microplásticos
+    "microplastic removal","microplastics adsorption",
+    # colorantes — muy frecuente en adsorción pero fuera de foco
+    "methylene blue removal","rhodamine removal",
+    "dye removal","dye adsorption",
+    # petróleo
+    "oil spill","crude oil removal",
 ]
 KW_EXCL_ESTUDIO = [
-    "sensor","biosensor","fluorescence detection",
-    "colorimetric detection","luminescent",
+    # sensores — solo detección sin remoción
+    "electrochemical sensor","optical sensor","fluorescent sensor",
+    "biosensor for detection","colorimetric sensor",
+    # biomédico puro
     "drug delivery","nanocarrier","controlled release",
-    "pharmacokinetic","clinical trial","in vivo","animal model",
-    "cell line","qpcr","rt-qpcr","integron","sars-cov-2",
-    "antimicrobial resistance gene","16s rrna",
-    "advanced oxidation","fenton","electrochemical degradation",
-    "membrane filtration","reverse osmosis",
+    "pharmacokinetic","clinical trial","animal model",
+    "cell line","in vitro cytotoxicity",
+    # genética / resistencia antimicrobiana (diferente a remoción)
+    "antimicrobial resistance gene","16s rrna","qpcr","integron",
+    # degradación sin adsorción
+    "photocatalytic degradation only","fenton degradation",
+    "electrochemical oxidation","ozonation",
 ]
 KW_EXCL_DOC = [
     "conference","proceedings","conference paper",
@@ -383,8 +392,12 @@ def detectar_pais(texto):
     if not t: return None
     for a, e in ALIAS_P.items():
         t = t.replace(a, e)
-    encontrados = [p for p in lista_paises if re.search(r"\b" + re.escape(p) + r"\b", t)]
-    return encontrados[-1] if encontrados else None
+    encontrados = [p for p in lista_paises
+                   if re.search(r"\b" + re.escape(p) + r"\b", t)]
+    if not encontrados:
+        return None
+    # devuelve el país que aparece más veces (primer autor generalmente)
+    return max(set(encontrados), key=encontrados.count)
 
 def txt_afil(fila):
     partes = []
@@ -513,8 +526,18 @@ def extraer_phpzc(t):
     return None
 
 def extraer_bet(t):
-    m = re.search(r"([\d]+\.?[\d]*)\s*m[2²]\s*/?\s*g", t)
-    return float(m.group(1)) if m else None
+    # Busca BET explícito o surface area con valor numérico razonable (1-3000 m2/g)
+    for patron in [
+        r"bet\s*(?:surface\s*area)?[^0-9]{0,10}([\d]+\.?[\d]*)\s*m[2²]",
+        r"surface\s*area[^0-9]{0,10}([\d]+\.?[\d]*)\s*m[2²]\s*/\s*g",
+        r"([\d]+\.?[\d]*)\s*m[2²]\s*/\s*g\s*(?:bet|surface)",
+    ]:
+        m = re.search(patron, t)
+        if m:
+            val = float(m.group(1))
+            if 0.1 <= val <= 3000:  # rango físicamente razonable
+                return val
+    return None
 
 def extraer_poro(t):
     m = re.search(r"pore\s*(?:size|diameter)[^0-9]{0,8}([\d]+\.?[\d]*)\s*(nm|a)", t)
@@ -535,11 +558,18 @@ def extraer_zeta(t):
     return float(m.group(1)) if m else None
 
 def extraer_ph_op(t):
-    for patron in [r"optimum\s*ph[^0-9]{0,5}([\d]+\.?[\d]*)",
-                   r"ph\s*(?:of\s*)?(?:optimum|optimal)[^0-9]{0,5}([\d]+\.?[\d]*)",
-                   r"ph\s*=\s*([\d]+\.?[\d]*)"]:
+    for patron in [
+        r"optimum\s*ph[^0-9]{0,8}([\d]+\.?[\d]*)",
+        r"optimal\s*ph[^0-9]{0,8}([\d]+\.?[\d]*)",
+        r"ph\s*(?:of\s*)?(?:optimum|optimal)\s*(?:adsorption|removal)[^0-9]{0,8}([\d]+\.?[\d]*)",
+        r"maximum\s*(?:removal|adsorption)\s*(?:at|was\s*achieved\s*at)\s*ph\s*([\d]+\.?[\d]*)",
+        r"best\s*(?:removal|adsorption)\s*(?:at|was)\s*ph\s*([\d]+\.?[\d]*)",
+    ]:
         m = re.search(patron, t)
-        if m: return float(m.group(1))
+        if m:
+            val = float(m.group(1))
+            if 1.0 <= val <= 14.0:  # rango físicamente válido
+                return val
     return None
 
 def extraer_dosis(t):
@@ -641,6 +671,12 @@ guardar(df_base, "01_todos_los_articulos.csv",
      "exc_c","exc_e","exc_d","anio_ok","dup_doi","dup_fuzzy"],
     "(base completa)")
 
+# 01B — Prioridad baja
+df_baja = df_base[df_base["etiqueta"] == "PRIORIDAD_BAJA"].copy()
+guardar(df_baja, "01b_prioridad_baja_ver.csv",
+    ["title_raw","year","journal_raw","doi_raw","score","razones"],
+    "(No descartar)")
+
 # 02 — PRISMA
 prisma = pd.DataFrame([
     {"etapa":"1. Registros cargados del RIS",                   "n": total_cargados},
@@ -688,7 +724,8 @@ guardar(df_inc, "06_revision_vs_investigacion.csv",
 # 07 — Analitos + adsorbentes + autores
 guardar(df_inc, "07_antibioticos_adsorbentes.csv",
     ["title_raw","year","journal_raw","doi_raw","autor1",
-     "analitos","adsorbente","tipo_articulo","etiqueta","score"],
+     "analitos","adsorbente","tipo_articulo","etiqueta","score",
+     "db_raw"],          # ← AÑADIR
     "(analito + adsorbente + autor)")
 
 # 08 — Variables fisicoquímicas completas
@@ -710,9 +747,11 @@ guardar(df_cuant, "09_datos_cuantitativos.csv",
 
 # 10 — Bibliometrico general
 guardar(df_inc, "10_bibliometrico.csv",
-    ["title_raw","year","journal_raw","doi_raw","autor1",
-     "pais","continente","adsorbente","analitos","tipo_articulo","etiqueta","score"],
-    "(para bibliometrix en R)")
+    ["title_raw","year","journal_raw","doi_raw",
+     "autor1","authors_raw",    # ← añadir authors_raw
+     "pais","continente","adsorbente","analitos",
+     "tipo_articulo","etiqueta","score","db_raw"],
+    "(para bibliometrix en R, autores)")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # RESUMEN FINAL
