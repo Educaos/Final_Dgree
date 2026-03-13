@@ -9,6 +9,7 @@ INSTALAR (una sola vez en la terminal):
     pip install rispy pandas numpy scikit-learn unidecode tqdm pycountry
 
 EJECUTAR:
+#Ejecutar Documento final de filtrado.
     python screening_final.py
 
 OUTPUTS en carpeta "output/":
